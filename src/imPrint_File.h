@@ -77,7 +77,7 @@ namespace imPrint {
 			p.Name = mkdirname(directory_name, p.Name.c_str());
 	}
 
-	void do_search(FileInfo& root) {
+	void do_search(FileInfo& root, std::vector<std::wstring>* filenames = NULL, bool should_move = true) {
 		using pack_t = std::tuple<FileInfo*, std::vector<FileInfo>::iterator>;
 		if (isFile(root.Attributes))
 			return;
@@ -110,8 +110,15 @@ namespace imPrint {
 
 			if (!isFile(iter->Attributes))
 				deeper(&(*iter), iter->Directory.end());//如果是文件夹，则进去遍历
-			else
+			else {
 				iter->Name.resize(iter->Name.size() - 4);//如果是文件，把Name结尾的通配符删掉，得到正确的文件名
+				if (filenames != NULL) {
+					if (should_move)
+						filenames->push_back(std::move(iter->Name));
+					else
+						filenames->push_back(iter->Name);
+				}
+			}
 
 			++iter;
 		}
@@ -121,18 +128,58 @@ namespace imPrint {
 
 	namespace File {
 
-		//获取目录(及其下所有子目录)结构
+		//获取目录及其下所有子目录结构
 		//directory_name指定目录名，必须是xx\xx\xx\*.*的形式
 		//返回值是目录结构
 		//不应抛出异常
-		std::vector<FileInfo> search_directory_info(const wchar_t* directory_name) {
+		FileInfo search_directory_info(const wchar_t* directory_name) {
 			auto rv = directory_info(directory_name);
 			fill_full_path(rv, directory_name);
 
 			for (auto rvit = rv.begin(); rvit != rv.end(); rvit++)
 				do_search(*rvit);
 
-			return rv;
+			FileInfo return_this;
+			return_this.Attributes = FILE_ATTRIBUTE_DIRECTORY;
+			return_this.Name = directory_name;
+			return_this.Directory = std::move(rv);
+
+			return return_this;
+		}
+
+		//获取目录及其下所有子目录中的文件名
+		//directory_name指定目录名，必须是xx\xx\xx\*.*的形式
+		//返回值是文件名集合
+		//不应抛出异常
+		std::vector<std::wstring> search_directory_files(const wchar_t* directory_name) {
+			std::vector<std::wstring> return_this;
+			auto rv = directory_info(directory_name);
+			fill_full_path(rv, directory_name);
+
+			for (auto rvit = rv.begin(); rvit != rv.end(); rvit++)
+				do_search(*rvit, &return_this);
+
+			return return_this;
+		}
+
+		//获取目录及其下所有子目录中的结构和文件名
+		//directory_name指定目录名，必须是xx\xx\xx\*.*的形式
+		//返回值是目录结构和文件名集合
+		//不应抛出异常
+		std::tuple<FileInfo, std::vector<std::wstring>> search_directory_info_files(const wchar_t* directory_name) {
+			std::vector<std::wstring> return_this;
+			auto rv = directory_info(directory_name);
+			fill_full_path(rv, directory_name);
+
+			for (auto rvit = rv.begin(); rvit != rv.end(); rvit++)
+				do_search(*rvit, &return_this, false);
+
+			FileInfo fileinfo;
+			fileinfo.Attributes = FILE_ATTRIBUTE_DIRECTORY;
+			fileinfo.Name = directory_name;
+			fileinfo.Directory = std::move(rv);
+
+			return std::tuple<FileInfo, std::vector<std::wstring>>(std::move(fileinfo), std::move(return_this));
 		}
 
 		//读取文件
@@ -208,11 +255,43 @@ namespace imPrint {
 			return write_file(dst, file_content.get(), file_size, should_overwrite, should_throw_if_count_mismatch);
 		}
 
+		//复制大文件，将文件部分轮流读取到内存中，然后写入到新文件
+		//
+		//返回值是操作是否成功
+		//不应抛出异常
 		bool copy_large_file(const wchar_t* src, const wchar_t* dst, std::size_t block_size) {
 			return false;
 		}
 
+		//复制文件，自动判断应该调用copy_large_file还是copy_small_file
+		//
+		//返回值是操作是否成功
+		//不应抛出异常
 		bool copy_file(const wchar_t* src, const wchar_t* dst, std::size_t limit_size, std::size_t block_size) {
+			return false;
+		}
+
+		//获得小文件hash
+		//
+		//返回值指示操作是否成功
+		//不应抛出异常
+		bool hash_small_file() {
+			return false;
+		}
+
+		//获得大文件hash
+		//
+		//返回值指示操作是否成功
+		//不应抛出异常
+		bool hash_large_file() {
+			return false;
+		}
+
+		//获得文件hash，自动判断应该调用hash_large_file还是hash_small_file
+		//
+		//返回值指示操作是否成功
+		//不应抛出异常
+		bool hash_file() {
 			return false;
 		}
 
